@@ -2,9 +2,7 @@
 // Changes may cause incorrect behavior and will be lost if the code is regenerated.
 
 using System;
-using System.Linq;
 using System.Net.Http;
-using ContactsList.API;
 using Microsoft.Rest;
 
 namespace ContactsList.API

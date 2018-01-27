@@ -12,6 +12,7 @@ using System.Security.Claims;
 using System;
 using System.Configuration;
 using System.Net.Http.Headers;
+using ContactsList.API.Storage;
 
 namespace ContactsList.API.Filters
 {
@@ -38,7 +39,7 @@ namespace ContactsList.API.Controllers
     public class ContactsController : ApiController
     {
         private const string FILENAME = "contacts.json";
-        private GenericStorage _storage;
+        private DocumentDb _storage;
 
         private static CompanyContactsAPI CompanyContactsAPIClientWithAuth()
         {
@@ -47,41 +48,15 @@ namespace ContactsList.API.Controllers
                 new AuthenticationHeaderValue("Bearer", ServicePrincipal.GetS2SAccessTokenForProdMSA().AccessToken);
             return client;
         }
-
-
-
+        
         public ContactsController()
         {
-            _storage = new GenericStorage();
+            _storage = new DocumentDb();
         }
 
         private async Task<IEnumerable<Contact>> GetContacts()
         {
-            var contacts = await _storage.Get(FILENAME);
-
-            if (contacts == null)
-            {
-                contacts = await _storage.Save(new Contact[]{
-                        new Contact { Id = 1, EmailAddress = "barney@contoso.com", Name = "Barney Poland"},
-                        new Contact { Id = 2, EmailAddress = "lacy@contoso.com", Name = "Lacy Barrera"},
-                        new Contact { Id = 3, EmailAddress = "lora@microsoft.com", Name = "Lora Riggs"}
-                    }
-                , FILENAME);
-
-            }
-
-            var contactsList = contacts.ToList<Contact>();
-            //Uncomment the following using block to call the CompanyContacts API
-            //using (var client = CompanyContactsAPIClientWithAuth())
-            //{
-            //    var results = await client.Contacts.GetAsync();
-            //    foreach (Contact c in results)
-            //    {
-            //        contactsList.Add(c);
-            //    }
-            //}
-
-            return contactsList;
+            return await _storage.Get();
         }
 
         /// <summary>
@@ -109,7 +84,7 @@ namespace ContactsList.API.Controllers
             Description = "Contact not found",
             Type = typeof(IEnumerable<Contact>))]
         [SwaggerOperation("GetContactById")]
-        public async Task<Contact> Get([FromUri] int id)
+        public async Task<Contact> Get([FromUri] string id)
         {
             var contacts = await GetContacts();
             return contacts.FirstOrDefault(x => x.Id == id);
@@ -131,7 +106,7 @@ namespace ContactsList.API.Controllers
 
             contact.CreatedBy = ((ClaimsIdentity)User.Identity)?.FindFirst(ClaimTypes.Email)?.Value;
             contactList.Add(contact);
-            await _storage.Save(contactList, FILENAME);
+            await _storage.Save(contactList);
             return contact;
         }
 
@@ -146,7 +121,7 @@ namespace ContactsList.API.Controllers
             Type = typeof(Contact))]
         public async Task<Contact> Put([FromBody] Contact contact)
         {
-            await Delete(contact.Id.Value);
+            await Delete(contact.Id);
             await Post(contact);
             return contact;
         }
@@ -163,7 +138,7 @@ namespace ContactsList.API.Controllers
         [SwaggerResponse(HttpStatusCode.NotFound,
             Description = "Contact not found",
             Type = typeof(bool))]
-        public async Task<HttpResponseMessage> Delete([FromUri] int id)
+        public async Task<HttpResponseMessage> Delete([FromUri] string id)
         {
             var contacts = await GetContacts();
             var contactList = contacts.ToList();
@@ -175,7 +150,7 @@ namespace ContactsList.API.Controllers
             else
             {
                 contactList.RemoveAll(x => x.Id == id);
-                await _storage.Save(contactList, FILENAME);
+                await _storage.Save(contactList);
                 return Request.CreateResponse<bool>(HttpStatusCode.OK, true);
             }
         }
